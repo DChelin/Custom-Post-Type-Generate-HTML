@@ -58,7 +58,7 @@ function render_export_page() {
     $all_categories = get_terms(array('taxonomy' => 'job-categories', 'hide_empty' => false));
 
     ?>
-    
+
     <div class="wrap">
         <h1>Export Posts to HTML</h1>
 
@@ -98,7 +98,7 @@ function render_export_page() {
                         <th><input type="checkbox" id="select-all" /><label for="select-all" style="margin-left: 5px; cursor: pointer;">Select All</label></th>
                         <th>Date</th>
                         <th>Ref</th>
-                        <th>Title/Industry/Location</th>
+                        <th>Title/Location/Industry</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -191,7 +191,7 @@ function export_selected_posts_to_html() {
 
         // Generate HTML table for export
         $html = '<table border="1" cellpadding="5" cellspacing="0">';
-        $html .= '<thead><tr><th>Date</th><th>Ref</th><th>Title/Industry/Location</th></tr></thead><tbody>';
+        $html .= '<thead><tr><th>Date</th><th>Ref</th><th>Title/Location/Industry</th></tr></thead><tbody>';
 
         foreach ($posts as $post) {
             $post_url = get_permalink($post->ID);

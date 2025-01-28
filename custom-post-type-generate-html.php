@@ -19,8 +19,8 @@ function render_export_page() {
         wp_die(__('You do not have sufficient permissions to access this page.'));
     }
 
-    // Get posts to display
-    $posts_per_page = 200; // Number of posts per page
+    // Set posts per page to 200
+    $posts_per_page = 200; // Display 200 posts per page
     $paged = isset($_GET['paged']) ? max(1, intval($_GET['paged'])) : 1;
 
     $query = new WP_Query(array(
@@ -39,8 +39,8 @@ function render_export_page() {
                     <tr>
                         <th><input type="checkbox" id="select-all" /></th>
                         <th>Date</th>
-                        <th>Reference Number</th>
-                        <th>Title</th>
+                        <th>Ref</th>
+                        <th>Title/Industry/Location</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -50,7 +50,24 @@ function render_export_page() {
                                 <td><input type="checkbox" name="post_ids[]" value="<?php echo esc_attr($post->ID); ?>" /></td>
                                 <td><?php echo esc_html($post->post_date); ?></td>
                                 <td><?php echo esc_html(get_post_meta($post->ID, 'reference_number', true)); ?></td>
-                                <td><a href="<?php echo esc_url(get_permalink($post->ID)); ?>"><?php echo esc_html($post->post_title); ?></a></td>
+                                <td>
+                                    <?php 
+                                        // Hyperlinked title
+                                        $post_url = get_permalink($post->ID);
+                                        $title = '<a href="' . esc_url($post_url) . '">' . esc_html($post->post_title) . '</a>';
+
+                                        // Job regions
+                                        $regions = wp_get_post_terms($post->ID, 'job-regions', array('fields' => 'names'));
+                                        $regions_text = $regions ? 'Regions: ' . implode(', ', $regions) : 'Regions: None';
+
+                                        // Job categories
+                                        $categories = wp_get_post_terms($post->ID, 'job-categories', array('fields' => 'names'));
+                                        $categories_text = $categories ? 'Categories: ' . implode(', ', $categories) : 'Categories: None';
+
+                                        // Combine into one cell with line breaks
+                                        echo $title . '<br>' . esc_html($regions_text) . '<br>' . esc_html($categories_text);
+                                    ?>
+                                </td>
                             </tr>
                         <?php endforeach; ?>
                     <?php else: ?>
@@ -132,16 +149,27 @@ function export_selected_posts_to_html() {
         echo '<body>';
         echo '<h1>Exported Job Listings</h1>';
         echo '<table>';
-        echo '<tr><th>Date</th><th>Reference Number</th><th>Title</th></tr>';
+        echo '<tr><th>Date</th><th>Ref</th><th>Title/Industry/Location</th></tr>';
 
         foreach ($posts as $post) {
             $reference_number = get_post_meta($post->ID, 'reference_number', true);
             $post_url = get_permalink($post->ID);
 
+            // Job regions and categories
+            $regions = wp_get_post_terms($post->ID, 'job-regions', array('fields' => 'names'));
+            $regions_text = $regions ? 'Regions: ' . implode(', ', $regions) : 'Regions: None';
+
+            $categories = wp_get_post_terms($post->ID, 'job-categories', array('fields' => 'names'));
+            $categories_text = $categories ? 'Categories: ' . implode(', ', $categories) : 'Categories: None';
+
             echo '<tr>';
             echo '<td>' . esc_html($post->post_date) . '</td>';
             echo '<td>' . esc_html($reference_number ? $reference_number : 'None') . '</td>';
-            echo '<td><a href="' . esc_url($post_url) . '">' . esc_html($post->post_title) . '</a></td>';
+            echo '<td>';
+            echo '<a href="' . esc_url($post_url) . '">' . esc_html($post->post_title) . '</a><br>';
+            echo esc_html($regions_text) . '<br>';
+            echo esc_html($categories_text);
+            echo '</td>';
             echo '</tr>';
         }
 

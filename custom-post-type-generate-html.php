@@ -13,31 +13,89 @@ function add_export_menu_item() {
 }
 add_action('admin_menu', 'add_export_menu_item');
 
-// Render the Export to HTML page
+// Render the Export to HTML page with filters
 function render_export_page() {
     if (!current_user_can('edit_posts')) {
         wp_die(__('You do not have sufficient permissions to access this page.'));
     }
 
+    // Get the selected filters (if any)
+    $selected_region = isset($_GET['job_region']) ? sanitize_text_field($_GET['job_region']) : '';
+    $selected_category = isset($_GET['job_category']) ? sanitize_text_field($_GET['job_category']) : '';
+
     // Set posts per page to 200
     $posts_per_page = 200; // Display 200 posts per page
     $paged = isset($_GET['paged']) ? max(1, intval($_GET['paged'])) : 1;
 
-    $query = new WP_Query(array(
-        'post_type'      => 'job-listings', // Your custom post type
+    // Build query args based on filters
+    $query_args = array(
+        'post_type'      => 'job-listings',
         'posts_per_page' => $posts_per_page,
         'paged'          => $paged,
-    ));
+    );
 
+    if ($selected_region) {
+        $query_args['tax_query'][] = array(
+            'taxonomy' => 'job-regions',
+            'field'    => 'slug',
+            'terms'    => $selected_region,
+        );
+    }
+
+    if ($selected_category) {
+        $query_args['tax_query'][] = array(
+            'taxonomy' => 'job-categories',
+            'field'    => 'slug',
+            'terms'    => $selected_category,
+        );
+    }
+
+    $query = new WP_Query($query_args);
     $posts = $query->posts;
+
+    // Get all job regions and categories for filters
+    $all_regions = get_terms(array('taxonomy' => 'job-regions', 'hide_empty' => false));
+    $all_categories = get_terms(array('taxonomy' => 'job-categories', 'hide_empty' => false));
+
     ?>
+    
     <div class="wrap">
         <h1>Export Posts to HTML</h1>
+
+        <!-- Filter Form -->
+        <form method="get" action="">
+            <input type="hidden" name="page" value="export-to-html" />
+            <label for="job_region">Filter by Job Region:</label>
+            <select name="job_region" id="job_region">
+                <option value="">All Regions</option>
+                <?php foreach ($all_regions as $region): ?>
+                    <option value="<?php echo esc_attr($region->slug); ?>" <?php selected($selected_region, $region->slug); ?>>
+                        <?php echo esc_html($region->name); ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+
+            <label for="job_category">Filter by Job Category:</label>
+            <select name="job_category" id="job_category">
+                <option value="">All Categories</option>
+                <?php foreach ($all_categories as $category): ?>
+                    <option value="<?php echo esc_attr($category->slug); ?>" <?php selected($selected_category, $category->slug); ?>>
+                        <?php echo esc_html($category->name); ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+
+            <button type="submit" class="button">Filter</button>
+        </form>
+
+        <br>
+
+        <!-- Table of Posts -->
         <form method="post">
             <table class="wp-list-table widefat fixed striped">
                 <thead>
                     <tr>
-                        <th><input type="checkbox" id="select-all" /></th>
+                        <th><input type="checkbox" id="select-all" /><label for="select-all" style="margin-left: 5px; cursor: pointer;">Select All</label></th>
                         <th>Date</th>
                         <th>Ref</th>
                         <th>Title/Industry/Location</th>
@@ -113,12 +171,13 @@ function render_export_page() {
 // Handle the HTML export
 function export_selected_posts_to_html() {
     if (isset($_POST['export_html'])) {
+        // Ensure post IDs are selected
         if (empty($_POST['post_ids'])) {
             echo '<div class="notice notice-warning"><p>No posts selected for export.</p></div>';
             return;
         }
 
-        $post_ids = array_map('intval', $_POST['post_ids']);
+        $post_ids = array_map('intval', $_POST['post_ids']); // Sanitize the IDs
         $posts = get_posts(array(
             'post_type'      => 'job-listings',
             'post__in'       => $post_ids,
@@ -130,53 +189,31 @@ function export_selected_posts_to_html() {
             return;
         }
 
-        // Prepare HTML output
-        header('Content-Type: text/html');
-        header('Content-Disposition: attachment; filename="exported_posts.html"');
-
-        echo '<!DOCTYPE html>';
-        echo '<html lang="en">';
-        echo '<head>';
-        echo '<meta charset="UTF-8">';
-        echo '<meta name="viewport" content="width=device-width, initial-scale=1.0">';
-        echo '<title>Exported Posts</title>';
-        echo '<style>';
-        echo 'table { width: 100%; border-collapse: collapse; }';
-        echo 'th, td { padding: 8px; border: 1px solid #ddd; text-align: left; }';
-        echo 'th { background-color: #f2f2f2; }';
-        echo '</style>';
-        echo '</head>';
-        echo '<body>';
-        echo '<h1>Exported Job Listings</h1>';
-        echo '<table>';
-        echo '<tr><th>Date</th><th>Ref</th><th>Title/Industry/Location</th></tr>';
+        // Generate HTML table for export
+        $html = '<table border="1" cellpadding="5" cellspacing="0">';
+        $html .= '<thead><tr><th>Date</th><th>Ref</th><th>Title/Industry/Location</th></tr></thead><tbody>';
 
         foreach ($posts as $post) {
-            $reference_number = get_post_meta($post->ID, 'reference_number', true);
             $post_url = get_permalink($post->ID);
-
-            // Job regions and categories
+            $title = '<a href="' . esc_url($post_url) . '">' . esc_html($post->post_title) . '</a>';
             $regions = wp_get_post_terms($post->ID, 'job-regions', array('fields' => 'names'));
-            $regions_text = $regions ? 'Regions: ' . implode(', ', $regions) : 'Regions: None';
-
             $categories = wp_get_post_terms($post->ID, 'job-categories', array('fields' => 'names'));
+            $regions_text = $regions ? 'Regions: ' . implode(', ', $regions) : 'Regions: None';
             $categories_text = $categories ? 'Categories: ' . implode(', ', $categories) : 'Categories: None';
 
-            echo '<tr>';
-            echo '<td>' . esc_html($post->post_date) . '</td>';
-            echo '<td>' . esc_html($reference_number ? $reference_number : 'None') . '</td>';
-            echo '<td>';
-            echo '<a href="' . esc_url($post_url) . '">' . esc_html($post->post_title) . '</a><br>';
-            echo esc_html($regions_text) . '<br>';
-            echo esc_html($categories_text);
-            echo '</td>';
-            echo '</tr>';
+            $html .= '<tr>';
+            $html .= '<td>' . esc_html($post->post_date) . '</td>';
+            $html .= '<td>' . esc_html(get_post_meta($post->ID, 'reference_number', true)) . '</td>';
+            $html .= '<td>' . $title . '<br>' . esc_html($regions_text) . '<br>' . esc_html($categories_text) . '</td>';
+            $html .= '</tr>';
         }
 
-        echo '</table>';
-        echo '</body>';
-        echo '</html>';
+        $html .= '</tbody></table>';
 
+        // Output HTML file
+        header('Content-Type: text/html');
+        header('Content-Disposition: attachment; filename="exported_posts.html"');
+        echo $html;
         exit;
     }
 }

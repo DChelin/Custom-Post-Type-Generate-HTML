@@ -22,6 +22,7 @@ function render_export_page() {
     // Get the selected filters (if any)
     $selected_region = isset($_GET['job_region']) ? sanitize_text_field($_GET['job_region']) : '';
     $selected_category = isset($_GET['job_category']) ? sanitize_text_field($_GET['job_category']) : '';
+    $selected_author = isset($_GET['job_author']) ? sanitize_text_field($_GET['job_author']) : '';
 
     // Set posts per page to 200
     $posts_per_page = 200; // Display 200 posts per page
@@ -50,12 +51,17 @@ function render_export_page() {
         );
     }
 
+    if ($selected_author) {
+        $query_args['author'] = $selected_author;
+    }
+
     $query = new WP_Query($query_args);
     $posts = $query->posts;
 
-    // Get all job regions and categories for filters
+    // Get all job regions, categories, and authors for filters
     $all_regions = get_terms(array('taxonomy' => 'job-regions', 'hide_empty' => false));
     $all_categories = get_terms(array('taxonomy' => 'job-categories', 'hide_empty' => false));
+    $all_authors = get_users(array('who' => 'authors', 'fields' => array('ID', 'display_name')));
 
     ?>
 
@@ -85,10 +91,20 @@ function render_export_page() {
                 <?php endforeach; ?>
             </select>
 
+            <label for="job_author">Filter by Author:</label>
+            <select name="job_author" id="job_author">
+                <option value="">All Authors</option>
+                <?php foreach ($all_authors as $author): ?>
+                    <option value="<?php echo esc_attr($author->ID); ?>" <?php selected($selected_author, $author->ID); ?>>
+                        <?php echo esc_html($author->display_name); ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+
             <button type="submit" class="button">Filter</button>
         </form>
 
-        <br>
+        <br style="clear: both; height: 15px;" />
 
         <!-- Table of Posts -->
         <form method="post">
@@ -189,9 +205,9 @@ function export_selected_posts_to_html() {
             return;
         }
 
-        // Generate HTML table for export
+        // Generate HTML table for export without the Date column
         $html = '<table border="1" cellpadding="5" cellspacing="0">';
-        $html .= '<thead><tr><th>Date</th><th>Ref</th><th>Title/Location/Industry</th></tr></thead><tbody>';
+        $html .= '<thead><tr><th>Ref</th><th>Title/Location/Industry</th></tr></thead><tbody>';
 
         foreach ($posts as $post) {
             $post_url = get_permalink($post->ID);
@@ -202,7 +218,6 @@ function export_selected_posts_to_html() {
             $categories_text = $categories ? 'Categories: ' . implode(', ', $categories) : 'Categories: None';
 
             $html .= '<tr>';
-            $html .= '<td>' . esc_html($post->post_date) . '</td>';
             $html .= '<td>' . esc_html(get_post_meta($post->ID, 'reference_number', true)) . '</td>';
             $html .= '<td>' . $title . '<br>' . esc_html($regions_text) . '<br>' . esc_html($categories_text) . '</td>';
             $html .= '</tr>';
